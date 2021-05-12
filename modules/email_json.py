@@ -22,16 +22,18 @@ from lib.utils import *
 import lib.calendar as gcalendar
 
 
-def user_extract(user, data, client, internal_auth, internal_token, cookies):
+def user_extract(user, data, client, internal_auth, internal_token, cookies, items):
     res = {}
     gaiaID = user["personId"][0]
     email = user["lookupId"]
     infos = data["people"][gaiaID]
 
+    user_base = {}
+
     # get name
     name = get_account_name(client, gaiaID, internal_auth, internal_token, cookies, config)
     if name:
-        res['user_name'] = name
+        user_base['user_name'] = name
     else:
         if "name" not in infos:
             print("[-] Couldn't find name")
@@ -39,9 +41,32 @@ def user_extract(user, data, client, internal_auth, internal_token, cookies):
             for i in range(len(infos["name"])):
                 if 'displayName' in infos['name'][i].keys():
                     name = infos["name"][i]["displayName"]
-                    res['user_name'] = name
+                    user_base['user_name'] = name
 
     # profile picture
+
+    # last edit
+    try:
+        timestamp = int(infos["metadata"]["lastUpdateTimeMicros"][:-3])
+        # last_edit = datetime.utcfromtimestamp(timestamp).strftime("%Y/%m/%d %H:%M:%S (UTC)")
+        user_base['last_profile_update_time'] = datetime.fromtimestamp(timestamp)
+        # print(f"\nLast profile edit : {last_edit}")
+    except KeyError:
+        user_base['last_profile_update_time'] = None
+    user_base['google_id'] = gaiaID
+
+    maps_crawler = True
+    youtube_crawler = True
+    calendar_crawler = True
+    if items:
+        if 'maps' not in items:
+            maps_crawler = False
+        if 'youtube' not in items:
+            youtube_crawler = False
+        if 'calendar' not in items:
+            calendar_crawler = False
+
+    # if hangout_crawler:
     profile_pic_link = infos["photo"][0]["url"]
     req = client.get(profile_pic_link)
 
@@ -49,18 +74,8 @@ def user_extract(user, data, client, internal_auth, internal_token, cookies):
     profile_pic_hash = image_hash(profile_pic_img)
     is_default_profile_pic = detect_default_profile_pic(profile_pic_hash)
     # 判断是否是默认头像
-    res['is_default_profile_pic'] = is_default_profile_pic
-    res['profile_imag_url'] = profile_pic_link
-
-    # last edit
-    try:
-        timestamp = int(infos["metadata"]["lastUpdateTimeMicros"][:-3])
-        # last_edit = datetime.utcfromtimestamp(timestamp).strftime("%Y/%m/%d %H:%M:%S (UTC)")
-        res['last_profile_update_time'] = datetime.fromtimestamp(timestamp)
-        # print(f"\nLast profile edit : {last_edit}")
-    except KeyError:
-        res['last_profile_update_time'] = None
-    res['google_id'] = gaiaID
+    user_base['is_default_profile_pic'] = is_default_profile_pic
+    user_base['profile_imag_url'] = profile_pic_link
 
     # is bot?
     # profile_pic = infos["photo"][0]["url"]
@@ -68,11 +83,11 @@ def user_extract(user, data, client, internal_auth, internal_token, cookies):
     if "extendedData" in infos:
         isBot = infos["extendedData"]["hangoutsExtendedData"]["isBot"]
         if isBot:
-            res['is_hangout_bot'] = True
+            user_base['is_hangout_bot'] = True
         else:
-            res['is_hangout_bot'] = False
+            user_base['is_hangout_bot'] = False
     else:
-        res['is_hangout_bot'] = None
+        user_base['is_hangout_bot'] = None
 
     # decide to check YouTube
     ytb_hunt = False
@@ -81,69 +96,74 @@ def user_extract(user, data, client, internal_auth, internal_token, cookies):
                     infos["inAppReachability"]]
         if name and (config.ytb_hunt_always or "youtube" in services):
             ytb_hunt = True
-        res['activated_google_services'] = [x.capitalize() for x in services]
+        user_base['activated_google_services'] = [x.capitalize() for x in services]
 
     except KeyError:
         ytb_hunt = True
-        res['activated_google_services'] = []
+        user_base['activated_google_services'] = []
+
+    res['user_base'] = user_base
 
     # check YouTube
-    youtube = {
-        'channel': [],
-        'confidence': None,
-        'possible_user_names': []
-    }
-    if name and ytb_hunt:
-        data = ytb.get_channels(client, name, config.data_path,
-                                config.gdocs_public_doc)
-        if not data:
-            pass
-        else:
-            confidence, channels = ytb.get_confidence(data, name, profile_pic_hash)
-            youtube['confidence'] = confidence
+    if youtube_crawler:
+        youtube = {
+            'channel': [],
+            'confidence': None,
+            'possible_user_names': []
+        }
+        if name and ytb_hunt:
+            data = ytb.get_channels(client, name, config.data_path,
+                                    config.gdocs_public_doc)
+            if not data:
+                pass
+            else:
+                confidence, channels = ytb.get_confidence(data, name, profile_pic_hash)
+                youtube['confidence'] = confidence
 
-            if confidence:
-                for channel in channels:
-                    youtube['channel'].append({
-                        'name': channel['name'],
-                        'profile_url': channel['profile_url'],
-                    })
-                possible_usernames = ytb.extract_usernames(channels)
-                if possible_usernames:
-                    youtube['possible_user_names'] = possible_usernames
+                if confidence:
+                    for channel in channels:
+                        youtube['channel'].append({
+                            'name': channel['name'],
+                            'profile_url': channel['profile_url'],
+                        })
+                    possible_usernames = ytb.extract_usernames(channels)
+                    if possible_usernames:
+                        youtube['possible_user_names'] = possible_usernames
 
-    res['youtube'] = youtube
+        res['youtube'] = youtube
 
     # TODO: return gpics function output here
     # gpics(gaiaID, client, cookies, config.headers, config.regexs["albums"], config.regexs["photos"],
     #      config.headless)
 
     # reviews
-    reviews = gmaps.scrape(gaiaID, client, cookies, config, config.headers, config.regexs["review_loc_by_id"],
-                           config.headless)
-    maps = {
-        'confidence': None,
-        'location_names': []
-    }
-    if reviews:
-        confidence, locations = gmaps.get_confidence(reviews, config.gmaps_radius)
-        loc_names = []
-        for loc in locations:
-            loc_names.append(
-                f"{loc['avg']['town']},{loc['avg']['country']}"
-            )
-        loc_names = set(loc_names)  # delete duplicates
-        maps['loc_names'] = list(loc_names)
+    if maps_crawler:
+        reviews = gmaps.scrape(gaiaID, client, cookies, config, config.headers, config.regexs["review_loc_by_id"],
+                               config.headless)
+        maps = {
+            'confidence': None,
+            'location_names': []
+        }
+        if reviews:
+            confidence, locations = gmaps.get_confidence(reviews, config.gmaps_radius)
+            loc_names = []
+            for loc in locations:
+                loc_names.append(
+                    f"{loc['avg']['town']},{loc['avg']['country']}"
+                )
+            loc_names = set(loc_names)  # delete duplicates
+            maps['loc_names'] = list(loc_names)
 
-    res['maps'] = maps
+        res['maps'] = maps
 
     # Google Calendar
-    calendar_response = gcalendar.fetch(email, client, config)
-    res['calendar'] = calendar_response if calendar_response else {"status": False, "events": []}
+    if calendar_crawler:
+        calendar_response = gcalendar.fetch(email, client, config)
+        res['calendar'] = calendar_response if calendar_response else {"status": False, "events": []}
     return res
 
 
-def email_hunt(email):
+def email_hunt(email, items=None):
     """
     {
         "email": "xxx@gmail.com",
@@ -172,6 +192,7 @@ def email_hunt(email):
         }]
     }
     :param email:
+    :param items:
     :return:
     """
     banner()
@@ -197,6 +218,6 @@ def email_hunt(email):
 
     res['matches'] = []
     for user in data["matches"]:
-        u = user_extract(user, data, client, internal_auth, internal_token, cookies)
+        u = user_extract(user, data, client, internal_auth, internal_token, cookies, items)
         res['matches'].append(u)
     return res

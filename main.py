@@ -6,10 +6,10 @@ import json
 app = FastAPI()
 
 
-@app.get("/{email}")
-async def read_root(email):
+@app.get("/{email}/{services}")
+async def read_root(email, services):
     try:
-        return json.loads(json.dumps(email_hunt(email), default=str))
+        return json.loads(json.dumps(email_hunt(email, services), default=str))
     except Exception as e:
         return {'error': str(e)}
 
