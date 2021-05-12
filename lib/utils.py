@@ -23,11 +23,14 @@ class TMPrinter():
         else:
             text += (" " * (self.max_len - len(text)))
         print(text, end='\r')
+
     def clear(self):
-    	print(" " * self.max_len, end="\r")
+        print(" " * self.max_len, end="\r")
+
 
 def within_docker():
     return Path('/.dockerenv').is_file()
+
 
 def is_email_google_account(httpx_client, auth, cookies, email, hangouts_token):
     host = "https://people-pa.clients6.google.com"
@@ -43,11 +46,12 @@ def is_email_google_account(httpx_client, auth, cookies, email, hangouts_token):
 
     req = httpx_client.post(host + url, data=body.format(email), headers=headers, cookies=cookies)
     data = json.loads(req.text)
-    #pprint(data); exit()
+    # pprint(data); exit()
     if not "matches" in data:
-        exit("[-] This email address does not belong to a Google Account.")
+        raise Exception("[-] This email address does not belong to a Google Account.")
 
     return data
+
 
 def get_account_name(httpx_client, gaiaID, internal_auth, internal_token, cookies, config):
     # Bypass method
@@ -65,7 +69,7 @@ def get_account_name(httpx_client, gaiaID, internal_auth, internal_token, cookie
     try:
         name = data["personResponse"][0]["person"]["metadata"]["bestDisplayName"]["displayName"]
     except KeyError:
-        pass # We fallback on the classic method
+        pass  # We fallback on the classic method
     else:
         return name
 
@@ -77,14 +81,17 @@ def get_account_name(httpx_client, gaiaID, internal_auth, internal_token, cookie
         return None
     return match[1]
 
+
 def image_hash(img):
     hash = str(imagehash.average_hash(img))
     return hash
+
 
 def detect_default_profile_pic(hash):
     if hash == 'ffffc3c3e7c38181':
         return True
     return False
+
 
 def sanitize_location(location):
     not_country = False
@@ -112,7 +119,8 @@ def sanitize_location(location):
 
 def get_driverpath():
     tmprinter = TMPrinter()
-    drivers = [str(x.absolute()) for x in Path('.').rglob('chromedriver*') if not "chromedriver_autoinstaller" in str(x)]
+    drivers = [str(x.absolute()) for x in Path('.').rglob('chromedriver*') if
+               not "chromedriver_autoinstaller" in str(x)]
     if drivers:
         return drivers[0]
     else:
@@ -122,11 +130,13 @@ def get_driverpath():
         tmprinter.out("I can't find the chromedriver, so I'm downloading and installing it for you...")
         path = chromedriver_autoinstaller.install(cwd=True)
         tmprinter.out("")
-        drivers = [str(x.absolute()) for x in Path('.').rglob('chromedriver*') if x.name.lower() == "chromedriver" or x.name.lower() == "chromedriver.exe"]
+        drivers = [str(x.absolute()) for x in Path('.').rglob('chromedriver*') if
+                   x.name.lower() == "chromedriver" or x.name.lower() == "chromedriver.exe"]
         if drivers:
             return path
         else:
-            exit(f"I can't find the chromedriver.\nI installed it in \"{path}\" but it must be in the GHunt directory or PATH, you should move it here.")
+            exit(
+                f"I can't find the chromedriver.\nI installed it in \"{path}\" but it must be in the GHunt directory or PATH, you should move it here.")
 
 
 def get_chrome_options_args(is_headless):

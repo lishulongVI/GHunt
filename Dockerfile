@@ -24,4 +24,6 @@ COPY --chown=app:app . .
 
 USER app
 
+WORKDIR /usr/src/app
+
 ENTRYPOINT [ "python3" ]
