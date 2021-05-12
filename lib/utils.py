@@ -88,7 +88,7 @@ def image_hash(img):
 
 
 def detect_default_profile_pic(hash):
-    if hash == 'ffffc3c3e7c38181':
+    if hash in ('ffffc3c3e7c38181', '00001818183c7e7e'):
         return True
     return False
 

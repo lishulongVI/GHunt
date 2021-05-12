@@ -49,10 +49,8 @@ def user_extract(user, data, client, internal_auth, internal_token, cookies):
     profile_pic_hash = image_hash(profile_pic_img)
     is_default_profile_pic = detect_default_profile_pic(profile_pic_hash)
     # 判断是否是默认头像
-    if is_default_profile_pic:
-        res['profile_imag_url'] = None
-    else:
-        res['profile_imag_url'] = profile_pic_link
+    res['is_default_profile_pic'] = is_default_profile_pic
+    res['profile_imag_url'] = profile_pic_link
 
     # last edit
     try:
@@ -65,8 +63,8 @@ def user_extract(user, data, client, internal_auth, internal_token, cookies):
     res['google_id'] = gaiaID
 
     # is bot?
-    profile_pic = infos["photo"][0]["url"]
-    res['hangout_profile_image_url'] = profile_pic
+    # profile_pic = infos["photo"][0]["url"]
+    # res['hangout_profile_image_url'] = profile_pic
     if "extendedData" in infos:
         isBot = infos["extendedData"]["hangoutsExtendedData"]["isBot"]
         if isBot:
@@ -154,7 +152,7 @@ def email_hunt(email):
             "profile_imag_url": "",
             "last_profile_update_time": "2021-05-11 22:39:36.727355",
             "google_id": 107640112940428892434,
-            "hangout_profile_image_url": "",
+            "is_default_profile_pic": True,
             "is_hangout_bot": null,
             "activated_google_services": [],
             "youtube": {
